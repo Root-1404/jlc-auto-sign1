@@ -485,12 +485,19 @@ def ensure_login_page(driver, account_index):
                 chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")
                 chrome_options.add_argument("--disable-blink-features=AutomationControlled")
                 chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+                chrome_options.add_argument("--start-maximized")
+                chrome_options.add_argument("--no-first-run")
+                chrome_options.add_argument("--disable-default-apps")
                 chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
                 chrome_options.add_experimental_option('useAutomationExtension', False)
                 caps = DesiredCapabilities.CHROME
                 caps['goog:loggingPrefs'] = {'performance': 'ALL'}
                 driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
-                driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                driver.execute_script("""
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
+Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh']});
+""")
                 smart_sleep(2)
         except Exception as e:
             restarts += 1
@@ -510,12 +517,19 @@ def ensure_login_page(driver, account_index):
             chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+            chrome_options.add_argument("--start-maximized")
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--disable-default-apps")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             caps = DesiredCapabilities.CHROME
             caps['goog:loggingPrefs'] = {'performance': 'ALL'}
             driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            driver.execute_script("""
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
+Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh']});
+""")
             smart_sleep(2)
     return False
 
@@ -595,13 +609,20 @@ def sign_in_account(username, password, account_index, total_accounts, retry_cou
     chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+    chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--disable-default-apps")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     caps = DesiredCapabilities.CHROME
     caps['goog:loggingPrefs'] = {'performance': 'ALL'}
 
     driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    driver.execute_script("""
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
+Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh']});
+""")
     wait = WebDriverWait(driver,25)
 
     result = {
@@ -656,12 +677,15 @@ def sign_in_account(username, password, account_index, total_accounts, retry_cou
             log(f"账号 {account_index} - ⚠️ 登录输入框未找到: {e}")
             result['oshwhub_status'] = '登录失败'
             return result
+
         try:
             login_btn = wait.until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button.submit"))
             )
-            login_btn.click()
-            log(f"账号 {account_index} - 已点击登录按钮")
+            # JS派发鼠标点击事件，规避前端风控拦截click
+            driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));", login_btn)
+            log(f"账号 {account_index} - JS脚本触发登录按钮点击")
+            smart_sleep_random(3,5)
         except Exception as e:
             log(f"账号 {account_index} - ⚠️ 登录按钮定位失败: {e}")
             result['oshwhub_status'] = '登录失败'
@@ -673,7 +697,7 @@ def sign_in_account(username, password, account_index, total_accounts, retry_cou
             result['oshwhub_status'] = '密码错误'
             return result
 
-        # ============【修复滑块：探测是否存在，不存在直接跳过】============
+        # ============【探测滑块：存在才滑动，不存在直接跳过】============
         slider_exist = False
         try:
             slider = WebDriverWait(driver,3).until(
@@ -695,15 +719,21 @@ def sign_in_account(username, password, account_index, total_accounts, retry_cou
                 result['oshwhub_status'] = '密码错误'
                 return result
 
-        # 统一等待登录跳转
+        # 等待跳转，超时放大至30秒，输出调试信息
         try:
-            WebDriverWait(driver,15).until(lambda d: "oshwhub.com" in d.current_url and "passport.jlc.com" not in d.current_url)
+            WebDriverWait(driver,30).until(lambda d: "oshwhub.com" in d.current_url and "passport.jlc.com" not in d.current_url)
         except Exception as e:
-            log(f"账号 {account_index} - 登录跳转等待异常: {e}")
-        # =================================================================
+            current_url = driver.current_url
+            page_title = driver.title
+            log(f"账号 {account_index} - 登录跳转等待异常, url={current_url}, title={page_title}, err:{e}")
+            try:
+                page_snippet = driver.page_source[:1000]
+                log(f"账号 {account_index} - 页面片段:{page_snippet}")
+            except Exception:
+                pass
 
         log(f"账号 {account_index} - 等待登录跳转...")
-        max_wait = 15
+        max_wait = 30
         jumped = False
         for i in range(max_wait):
             current_url = driver.current_url
