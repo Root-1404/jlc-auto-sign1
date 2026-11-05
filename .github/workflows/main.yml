@@ -52,9 +52,8 @@ jobs:
       - name: 执行签到脚本
         env:
           # --------单账号模式（填secrets，取消下面两行注释，注释多账号部分）--------
-           JLC_USERNAME: ${{ secrets.JLC_USERNAME }}
-           JLC_PASSWORD: ${{ secrets.JLC_PASSWORD }}
-
+          JLC_USERNAME: ${{ secrets.JLC_USERNAME }}
+          JLC_PASSWORD: ${{ secrets.JLC_PASSWORD }}
           # --------多账号模式（填secrets，取消下面两行注释，注释单账号部分）--------
           # ACCOUNTS: ${{ secrets.ACCOUNTS }}
           # PASSWORDS: ${{ secrets.PASSWORDS }}
