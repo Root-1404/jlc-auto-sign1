@@ -1,32 +1,36 @@
 name: auto-signin
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 支持网页手动点击运行
   schedule:
-    - cron: '0 17 * * *'
-    - cron: '0 11 * * *'
-    #在这里设置UTC运行时间，如果不知道怎么配置可以问AI
-    #实际运行时间会比设置时间延迟一小时以内，取决于当时github资源占用情况。
+    # cron 使用UTC时间，北京时间 = UTC +8小时
+    # 示例：北京时间 11点 → UTC 03点；北京时间17点 → UTC 09点
+    - cron: '0 03 * * *'   # 北京时间 11:00
+    - cron: '0 09 * * *'   # 北京时间 17:00
+    # github runner存在资源排队，实际执行可能会延迟数分钟到一小时内
 
 jobs:
   running:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout 拉取代码
         uses: actions/checkout@v3
 
-      - name: 'Set up Python'
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.7
-
-      - name: 'Set Timezone to UTC+8'
+      - name: 设置时区为东八区 Asia/Shanghai
         run: |
           sudo timedatectl set-timezone Asia/Shanghai
           echo "Current time: $(date)"
 
-      - name: 'Install requirements'
+      - name: 安装Chrome运行依赖库
+        run: sudo apt-get update && sudo apt-get install -y libnss3 libgbm1
+
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.7
+
+      - name: 安装Python依赖包
         run: |
           pip install --upgrade pip
           pip install -r ./requirements.txt
@@ -34,6 +38,34 @@ jobs:
       - name: Prepare chromedriver
         uses: nanasess/setup-chromedriver@v2
 
-      - name: 'Working'
+      ##########################################################################
+      # 模式A：单账号，仓库Secrets配置 JLC_USERNAME 、JLC_PASSWORD
+      # 脚本读取环境变量，run直接执行 python jlc.py 不传参数
+      #
+      # 模式B：多账号，仓库Secrets配置 ACCOUNTS、PASSWORDS
+      # ACCOUNTS内容示例：user1,user2,user3
+      # PASSWORDS内容示例：pwd1,pwd2,pwd3
+      # env内打开ACCOUNTS / PASSWORDS，脚本读取命令行参数
+      #
+      # ⚠️正式定时任务 SKIP_RANDOM_SLEEP 设置为 false；调试才开启 true
+      ##########################################################################
+      - name: 执行签到脚本
+        env:
+          # --------单账号模式（填secrets，取消下面两行注释，注释多账号部分）--------
+           JLC_USERNAME: ${{ secrets.JLC_USERNAME }}
+           JLC_PASSWORD: ${{ secrets.JLC_PASSWORD }}
+
+          # --------多账号模式（填secrets，取消下面两行注释，注释单账号部分）--------
+          # ACCOUNTS: ${{ secrets.ACCOUNTS }}
+          # PASSWORDS: ${{ secrets.PASSWORDS }}
+
+          SKIP_RANDOM_SLEEP: "true" # 正式定时任务必须false；本地调试/手动测试改为true
         run: |
-          python ./jlc.py ${{ secrets.JLC_USERNAME }} ${{ secrets.JLC_PASSWORD }}
+          # 判断是否存在多账号变量，优先使用多账号；否则使用单账号环境变量模式
+          if [[ -n "${ACCOUNTS}" && -n "${PASSWORDS}" ]];then
+            echo "运行【多账号模式】"
+            python ./jlc.py "${ACCOUNTS}" "${PASSWORDS}"
+          else
+            echo "运行【单账号环境变量模式】"
+            python ./jlc.py
+          fi
