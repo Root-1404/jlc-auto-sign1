@@ -673,27 +673,34 @@ def sign_in_account(username, password, account_index, total_accounts, retry_cou
             result['oshwhub_status'] = '密码错误'
             return result
 
-        WebDriverWait(driver,10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".btn_slide")))
+        # ============【修复滑块：探测是否存在，不存在直接跳过】============
+        slider_exist = False
         try:
-            slider = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn_slide")))
-            track = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".nc_scale")))
+            slider = WebDriverWait(driver,3).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn_slide"))
+            )
+            track = WebDriverWait(driver,3).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".nc_scale"))
+            )
+            slider_exist = True
+        except Exception:
+            log(f"账号 {account_index} - 本次登录未触发滑块验证码，跳过滑块逻辑")
+
+        if slider_exist:
             log(f"账号 {account_index} - 检测到滑块验证码，开始真人模拟滑动")
             drag_slider_humanlike(driver, slider, track)
-
             smart_sleep(1)
             if check_password_error(driver, account_index):
                 result['password_error'] = True
                 result['oshwhub_status'] = '密码错误'
                 return result
 
-            WebDriverWait(driver,10).until(lambda d: "oshwhub.com" in d.current_url and "passport.jlc.com" not in d.current_url)
+        # 统一等待登录跳转
+        try:
+            WebDriverWait(driver,15).until(lambda d: "oshwhub.com" in d.current_url and "passport.jlc.com" not in d.current_url)
         except Exception as e:
-            log(f"账号 {account_index} - 滑块验证处理异常: {e}")
-            smart_sleep(1)
-            if check_password_error(driver, account_index):
-                result['password_error'] = True
-                result['oshwhub_status'] = '密码错误'
-                return result
+            log(f"账号 {account_index} - 登录跳转等待异常: {e}")
+        # =================================================================
 
         log(f"账号 {account_index} - 等待登录跳转...")
         max_wait = 15
